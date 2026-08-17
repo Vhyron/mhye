@@ -62,6 +62,12 @@ private val billingCycleOptions = listOf(
     BillingCycle.CUSTOM_DAYS to "Custom"
 )
 
+private val statusOptions = listOf(
+    SubscriptionStatus.ACTIVE,
+    SubscriptionStatus.PAUSED,
+    SubscriptionStatus.CANCELLED
+)
+
 /**
  * Add and edit share one form: [subscription] is `null` in add mode, and the
  * row being edited otherwise. Edit *is* the detail view — there is no separate
@@ -115,6 +121,9 @@ private fun SubscriptionForm(
     }
     var categoryId by rememberSaveable { mutableStateOf(subscription?.categoryId ?: 0) }
     var notes by rememberSaveable { mutableStateOf(subscription?.notes.orEmpty()) }
+    var status by rememberSaveable {
+        mutableStateOf(subscription?.status ?: SubscriptionStatus.ACTIVE)
+    }
     var showDeleteConfirmation by rememberSaveable { mutableStateOf(false) }
 
     // Categories arrive from Room a frame or two after the sheet opens.
@@ -230,6 +239,27 @@ private fun SubscriptionForm(
             modifier = Modifier.fillMaxWidth()
         )
 
+        // Add mode always starts ACTIVE — a status toggle only makes sense
+        // once the subscription exists.
+        if (subscription != null) {
+            Text(
+                text = "Status",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                statusOptions.forEachIndexed { index, option ->
+                    SegmentedButton(
+                        selected = status == option,
+                        onClick = { status = option },
+                        shape = SegmentedButtonDefaults.itemShape(index, statusOptions.size)
+                    ) {
+                        Text(statusLabel(option))
+                    }
+                }
+            }
+        }
+
         Button(
             onClick = {
                 onSave(
@@ -243,8 +273,7 @@ private fun SubscriptionForm(
                             .takeIf { billingCycle == BillingCycle.CUSTOM_DAYS },
                         renewalDate = renewalDate,
                         categoryId = categoryId,
-                        // Status is owned by the toggle, not this form.
-                        status = subscription?.status ?: SubscriptionStatus.ACTIVE,
+                        status = status,
                         notes = notes.trim().ifBlank { null }
                     )
                 )

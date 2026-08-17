@@ -20,6 +20,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -109,16 +110,27 @@ private fun SubscriptionRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isCancelled = subscription.status == SubscriptionStatus.CANCELLED
+    val details = listOfNotNull(
+        statusLabel(subscription.status).takeIf { subscription.status != SubscriptionStatus.ACTIVE },
+        billingCycleLabel(subscription),
+        "Renews ${formatRenewalDate(subscription.renewalDate)}"
+    )
+
     ListItem(
         modifier = modifier.clickable(onClick = onClick),
-        headlineContent = { Text(subscription.name) },
-        supportingContent = {
-            Text("${billingCycleLabel(subscription)} · Renews ${formatRenewalDate(subscription.renewalDate)}")
+        headlineContent = {
+            Text(
+                text = subscription.name,
+                textDecoration = if (isCancelled) TextDecoration.LineThrough else null
+            )
         },
+        supportingContent = { Text(details.joinToString(" · ")) },
         trailingContent = {
             Text(
                 text = formatCost(subscription),
-                style = MaterialTheme.typography.titleMedium
+                style = MaterialTheme.typography.titleMedium,
+                textDecoration = if (isCancelled) TextDecoration.LineThrough else null
             )
         }
     )
@@ -148,7 +160,7 @@ private fun SubscriptionListPreview() {
                     billingCycle = BillingCycle.YEARLY,
                     renewalDate = 1_800_000_000_000L,
                     categoryId = 1,
-                    status = SubscriptionStatus.ACTIVE
+                    status = SubscriptionStatus.PAUSED
                 ),
                 Subscription(
                     id = 3,
@@ -159,7 +171,7 @@ private fun SubscriptionListPreview() {
                     customCycleDays = 90,
                     renewalDate = 1_810_000_000_000L,
                     categoryId = 1,
-                    status = SubscriptionStatus.ACTIVE
+                    status = SubscriptionStatus.CANCELLED
                 )
             ),
             onAddClick = {},

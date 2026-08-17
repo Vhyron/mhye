@@ -2,6 +2,7 @@ package com.vhyron.mhye.ui.subscriptions
 
 import com.vhyron.mhye.data.BillingCycle
 import com.vhyron.mhye.data.Subscription
+import com.vhyron.mhye.data.SubscriptionStatus
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -19,6 +20,14 @@ internal fun formatRenewalDate(epochMillis: Long): String =
 
 internal fun formatCost(subscription: Subscription): String =
     String.format(Locale.getDefault(), "%s %,.2f", subscription.currency, subscription.cost)
+
+internal fun statusLabel(status: String): String =
+    when (status) {
+        SubscriptionStatus.ACTIVE -> "Active"
+        SubscriptionStatus.PAUSED -> "Paused"
+        SubscriptionStatus.CANCELLED -> "Cancelled"
+        else -> status
+    }
 
 internal fun billingCycleLabel(subscription: Subscription): String =
     when (subscription.billingCycle) {
