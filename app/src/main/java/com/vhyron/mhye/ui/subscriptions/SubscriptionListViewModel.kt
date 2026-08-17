@@ -8,10 +8,13 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.vhyron.mhye.data.AppDatabase
 import com.vhyron.mhye.data.Category
 import com.vhyron.mhye.data.CategoryDao
+import com.vhyron.mhye.data.MonthlySpend
 import com.vhyron.mhye.data.Subscription
 import com.vhyron.mhye.data.SubscriptionDao
+import com.vhyron.mhye.data.monthlySpend
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -22,6 +25,15 @@ class SubscriptionListViewModel(
 
     /** Soonest renewal first — the DAO query already applies that ordering. */
     val subscriptions: StateFlow<List<Subscription>> = subscriptionDao.observeAll()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
+            initialValue = emptyList()
+        )
+
+    /** Monthly-equivalent spend per currency, derived from the same query. */
+    val monthlySpend: StateFlow<List<MonthlySpend>> = subscriptions
+        .map { monthlySpend(it) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),

@@ -1,6 +1,10 @@
 package com.vhyron.mhye.ui.subscriptions
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -22,11 +26,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.vhyron.mhye.data.BillingCycle
+import com.vhyron.mhye.data.MonthlySpend
 import com.vhyron.mhye.data.Subscription
 import com.vhyron.mhye.data.SubscriptionStatus
+import com.vhyron.mhye.data.monthlySpend
 import com.vhyron.mhye.ui.theme.MhyeTheme
 
 @Composable
@@ -35,12 +42,14 @@ fun SubscriptionListScreen(
     viewModel: SubscriptionListViewModel = viewModel(factory = SubscriptionListViewModel.Factory)
 ) {
     val subscriptions by viewModel.subscriptions.collectAsStateWithLifecycle()
+    val monthlySpend by viewModel.monthlySpend.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
     var showSheet by rememberSaveable { mutableStateOf(false) }
     var editingId by rememberSaveable { mutableStateOf<Int?>(null) }
 
     SubscriptionListScreen(
         subscriptions = subscriptions,
+        monthlySpend = monthlySpend,
         onAddClick = {
             editingId = null
             showSheet = true
@@ -79,6 +88,7 @@ fun SubscriptionListScreen(
 @Composable
 private fun SubscriptionListScreen(
     subscriptions: List<Subscription>,
+    monthlySpend: List<MonthlySpend>,
     onAddClick: () -> Unit,
     onSubscriptionClick: (Subscription) -> Unit,
     modifier: Modifier = Modifier
@@ -92,14 +102,44 @@ private fun SubscriptionListScreen(
             }
         }
     ) { innerPadding ->
-        LazyColumn(contentPadding = innerPadding) {
-            items(subscriptions, key = { it.id }) { subscription ->
-                SubscriptionRow(
-                    subscription = subscription,
-                    onClick = { onSubscriptionClick(subscription) }
-                )
+        Column(modifier = Modifier.padding(innerPadding)) {
+            // Pinned above the list rather than scrolling away with it.
+            if (monthlySpend.isNotEmpty()) {
+                SpendSummary(monthlySpend)
                 HorizontalDivider()
             }
+            LazyColumn {
+                items(subscriptions, key = { it.id }) { subscription ->
+                    SubscriptionRow(
+                        subscription = subscription,
+                        onClick = { onSubscriptionClick(subscription) }
+                    )
+                    HorizontalDivider()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SpendSummary(monthlySpend: List<MonthlySpend>, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            text = "Monthly spend",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        // One line per currency — costs are never converted between them.
+        monthlySpend.forEach { spend ->
+            Text(
+                text = formatAmount(spend.currency, spend.amount),
+                style = MaterialTheme.typography.headlineSmall
+            )
         }
     }
 }
@@ -140,8 +180,7 @@ private fun SubscriptionRow(
 @Composable
 private fun SubscriptionListPreview() {
     MhyeTheme {
-        SubscriptionListScreen(
-            subscriptions = listOf(
+        val sample = listOf(
                 Subscription(
                     id = 1,
                     name = "Netflix",
@@ -173,7 +212,10 @@ private fun SubscriptionListPreview() {
                     categoryId = 1,
                     status = SubscriptionStatus.CANCELLED
                 )
-            ),
+        )
+        SubscriptionListScreen(
+            subscriptions = sample,
+            monthlySpend = monthlySpend(sample),
             onAddClick = {},
             onSubscriptionClick = {}
         )

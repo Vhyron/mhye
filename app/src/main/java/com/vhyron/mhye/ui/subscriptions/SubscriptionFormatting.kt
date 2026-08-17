@@ -18,8 +18,11 @@ internal fun formatRenewalDate(epochMillis: Long): String =
         .toLocalDate()
         .format(renewalDateFormatter)
 
+internal fun formatAmount(currency: String, amount: Double): String =
+    String.format(Locale.getDefault(), "%s %,.2f", currency, amount)
+
 internal fun formatCost(subscription: Subscription): String =
-    String.format(Locale.getDefault(), "%s %,.2f", subscription.currency, subscription.cost)
+    formatAmount(subscription.currency, subscription.cost)
 
 internal fun statusLabel(status: String): String =
     when (status) {
