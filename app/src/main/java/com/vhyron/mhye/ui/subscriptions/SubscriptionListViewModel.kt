@@ -1,5 +1,6 @@
 package com.vhyron.mhye.ui.subscriptions
 
+import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -12,6 +13,7 @@ import com.vhyron.mhye.data.MonthlySpend
 import com.vhyron.mhye.data.Subscription
 import com.vhyron.mhye.data.SubscriptionDao
 import com.vhyron.mhye.data.monthlySpend
+import com.vhyron.mhye.reminders.ReminderScheduler
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -19,6 +21,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class SubscriptionListViewModel(
+    private val application: Application,
     private val subscriptionDao: SubscriptionDao,
     categoryDao: CategoryDao
 ) : ViewModel() {
@@ -49,15 +52,26 @@ class SubscriptionListViewModel(
         )
 
     fun addSubscription(subscription: Subscription) {
-        viewModelScope.launch { subscriptionDao.insert(subscription) }
+        viewModelScope.launch {
+            val id = subscriptionDao.insert(subscription).toInt()
+            // Room assigns the id, so schedule against the stored row.
+            ReminderScheduler.schedule(application, subscription.copy(id = id))
+        }
     }
 
     fun updateSubscription(subscription: Subscription) {
-        viewModelScope.launch { subscriptionDao.update(subscription) }
+        viewModelScope.launch {
+            subscriptionDao.update(subscription)
+            // Replaces the pending reminder, or cancels it if no longer active.
+            ReminderScheduler.schedule(application, subscription)
+        }
     }
 
     fun deleteSubscription(subscription: Subscription) {
-        viewModelScope.launch { subscriptionDao.delete(subscription) }
+        viewModelScope.launch {
+            subscriptionDao.delete(subscription)
+            ReminderScheduler.cancel(application, subscription.id)
+        }
     }
 
     companion object {
@@ -67,7 +81,11 @@ class SubscriptionListViewModel(
             initializer {
                 val application = checkNotNull(this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY])
                 val database = AppDatabase.getInstance(application)
-                SubscriptionListViewModel(database.subscriptionDao(), database.categoryDao())
+                SubscriptionListViewModel(
+                    application,
+                    database.subscriptionDao(),
+                    database.categoryDao()
+                )
             }
         }
     }
