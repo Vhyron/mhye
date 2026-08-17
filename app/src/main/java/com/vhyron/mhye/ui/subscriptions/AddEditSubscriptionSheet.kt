@@ -37,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -117,7 +118,7 @@ private fun SubscriptionForm(
         mutableStateOf(subscription?.customCycleDays?.toString().orEmpty())
     }
     var renewalDate by rememberSaveable {
-        mutableStateOf(subscription?.renewalDate ?: defaultRenewalDate())
+        mutableLongStateOf(subscription?.renewalDate ?: defaultRenewalDate())
     }
     var categoryId by rememberSaveable { mutableStateOf(subscription?.categoryId ?: 0) }
     var notes by rememberSaveable { mutableStateOf(subscription?.notes.orEmpty()) }
