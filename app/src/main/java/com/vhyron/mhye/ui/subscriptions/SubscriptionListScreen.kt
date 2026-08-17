@@ -1,5 +1,6 @@
 package com.vhyron.mhye.ui.subscriptions
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -34,21 +35,40 @@ fun SubscriptionListScreen(
 ) {
     val subscriptions by viewModel.subscriptions.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
-    var showAddSheet by rememberSaveable { mutableStateOf(false) }
+    var showSheet by rememberSaveable { mutableStateOf(false) }
+    var editingId by rememberSaveable { mutableStateOf<Int?>(null) }
 
     SubscriptionListScreen(
         subscriptions = subscriptions,
-        onAddClick = { showAddSheet = true },
+        onAddClick = {
+            editingId = null
+            showSheet = true
+        },
+        onSubscriptionClick = { subscription ->
+            editingId = subscription.id
+            showSheet = true
+        },
         modifier = modifier
     )
 
-    if (showAddSheet) {
+    if (showSheet) {
+        // Resolved from the list so the sheet tracks the latest stored values.
+        val editing = editingId?.let { id -> subscriptions.firstOrNull { it.id == id } }
         AddEditSubscriptionSheet(
+            subscription = editing,
             categories = categories,
-            onDismiss = { showAddSheet = false },
+            onDismiss = { showSheet = false },
             onSave = { subscription ->
-                viewModel.addSubscription(subscription)
-                showAddSheet = false
+                if (editing == null) {
+                    viewModel.addSubscription(subscription)
+                } else {
+                    viewModel.updateSubscription(subscription)
+                }
+                showSheet = false
+            },
+            onDelete = { subscription ->
+                viewModel.deleteSubscription(subscription)
+                showSheet = false
             }
         )
     }
@@ -59,6 +79,7 @@ fun SubscriptionListScreen(
 private fun SubscriptionListScreen(
     subscriptions: List<Subscription>,
     onAddClick: () -> Unit,
+    onSubscriptionClick: (Subscription) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Scaffold(
@@ -72,7 +93,10 @@ private fun SubscriptionListScreen(
     ) { innerPadding ->
         LazyColumn(contentPadding = innerPadding) {
             items(subscriptions, key = { it.id }) { subscription ->
-                SubscriptionRow(subscription)
+                SubscriptionRow(
+                    subscription = subscription,
+                    onClick = { onSubscriptionClick(subscription) }
+                )
                 HorizontalDivider()
             }
         }
@@ -80,9 +104,13 @@ private fun SubscriptionListScreen(
 }
 
 @Composable
-private fun SubscriptionRow(subscription: Subscription, modifier: Modifier = Modifier) {
+private fun SubscriptionRow(
+    subscription: Subscription,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     ListItem(
-        modifier = modifier,
+        modifier = modifier.clickable(onClick = onClick),
         headlineContent = { Text(subscription.name) },
         supportingContent = {
             Text("${billingCycleLabel(subscription)} · Renews ${formatRenewalDate(subscription.renewalDate)}")
@@ -134,7 +162,8 @@ private fun SubscriptionListPreview() {
                     status = SubscriptionStatus.ACTIVE
                 )
             ),
-            onAddClick = {}
+            onAddClick = {},
+            onSubscriptionClick = {}
         )
     }
 }

@@ -40,6 +40,14 @@ class SubscriptionListViewModel(
         viewModelScope.launch { subscriptionDao.insert(subscription) }
     }
 
+    fun updateSubscription(subscription: Subscription) {
+        viewModelScope.launch { subscriptionDao.update(subscription) }
+    }
+
+    fun deleteSubscription(subscription: Subscription) {
+        viewModelScope.launch { subscriptionDao.delete(subscription) }
+    }
+
     companion object {
         private const val STOP_TIMEOUT_MILLIS = 5_000L
 

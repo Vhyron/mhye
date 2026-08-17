@@ -11,6 +11,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -34,10 +36,12 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -58,12 +62,19 @@ private val billingCycleOptions = listOf(
     BillingCycle.CUSTOM_DAYS to "Custom"
 )
 
+/**
+ * Add and edit share one form: [subscription] is `null` in add mode, and the
+ * row being edited otherwise. Edit *is* the detail view — there is no separate
+ * detail screen.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddEditSubscriptionSheet(
+    subscription: Subscription?,
     categories: List<Category>,
     onDismiss: () -> Unit,
     onSave: (Subscription) -> Unit,
+    onDelete: (Subscription) -> Unit,
     modifier: Modifier = Modifier
 ) {
     ModalBottomSheet(
@@ -71,23 +82,40 @@ fun AddEditSubscriptionSheet(
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         modifier = modifier
     ) {
-        SubscriptionForm(categories = categories, onSave = onSave)
+        // Re-key so opening a different row rebuilds the form state from scratch.
+        key(subscription?.id) {
+            SubscriptionForm(
+                subscription = subscription,
+                categories = categories,
+                onSave = onSave,
+                onDelete = onDelete
+            )
+        }
     }
 }
 
 @Composable
 private fun SubscriptionForm(
+    subscription: Subscription?,
     categories: List<Category>,
-    onSave: (Subscription) -> Unit
+    onSave: (Subscription) -> Unit,
+    onDelete: (Subscription) -> Unit
 ) {
-    var name by rememberSaveable { mutableStateOf("") }
-    var cost by rememberSaveable { mutableStateOf("") }
-    var currency by rememberSaveable { mutableStateOf(DEFAULT_CURRENCY) }
-    var billingCycle by rememberSaveable { mutableStateOf(BillingCycle.MONTHLY) }
-    var customCycleDays by rememberSaveable { mutableStateOf("") }
-    var renewalDate by rememberSaveable { mutableStateOf(defaultRenewalDate()) }
-    var categoryId by rememberSaveable { mutableStateOf(0) }
-    var notes by rememberSaveable { mutableStateOf("") }
+    var name by rememberSaveable { mutableStateOf(subscription?.name.orEmpty()) }
+    var cost by rememberSaveable { mutableStateOf(subscription?.cost?.toString().orEmpty()) }
+    var currency by rememberSaveable { mutableStateOf(subscription?.currency ?: DEFAULT_CURRENCY) }
+    var billingCycle by rememberSaveable {
+        mutableStateOf(subscription?.billingCycle ?: BillingCycle.MONTHLY)
+    }
+    var customCycleDays by rememberSaveable {
+        mutableStateOf(subscription?.customCycleDays?.toString().orEmpty())
+    }
+    var renewalDate by rememberSaveable {
+        mutableStateOf(subscription?.renewalDate ?: defaultRenewalDate())
+    }
+    var categoryId by rememberSaveable { mutableStateOf(subscription?.categoryId ?: 0) }
+    var notes by rememberSaveable { mutableStateOf(subscription?.notes.orEmpty()) }
+    var showDeleteConfirmation by rememberSaveable { mutableStateOf(false) }
 
     // Categories arrive from Room a frame or two after the sheet opens.
     LaunchedEffect(categories) {
@@ -111,11 +139,25 @@ private fun SubscriptionForm(
             .padding(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text(
-            text = "Add subscription",
-            style = MaterialTheme.typography.titleLarge,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(bottom = 4.dp)
-        )
+        ) {
+            Text(
+                text = if (subscription == null) "Add subscription" else "Edit subscription",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.weight(1f)
+            )
+            if (subscription != null) {
+                IconButton(onClick = { showDeleteConfirmation = true }) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete subscription",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        }
 
         OutlinedTextField(
             value = name,
@@ -192,6 +234,7 @@ private fun SubscriptionForm(
             onClick = {
                 onSave(
                     Subscription(
+                        id = subscription?.id ?: 0,
                         name = name.trim(),
                         cost = checkNotNull(parsedCost),
                         currency = currency.trim().uppercase(),
@@ -200,7 +243,8 @@ private fun SubscriptionForm(
                             .takeIf { billingCycle == BillingCycle.CUSTOM_DAYS },
                         renewalDate = renewalDate,
                         categoryId = categoryId,
-                        status = SubscriptionStatus.ACTIVE,
+                        // Status is owned by the toggle, not this form.
+                        status = subscription?.status ?: SubscriptionStatus.ACTIVE,
                         notes = notes.trim().ifBlank { null }
                     )
                 )
@@ -212,6 +256,27 @@ private fun SubscriptionForm(
         ) {
             Text("Save")
         }
+    }
+
+    if (showDeleteConfirmation && subscription != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmation = false },
+            title = { Text("Delete ${subscription.name}?") },
+            text = { Text("This can't be undone.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirmation = false
+                        onDelete(subscription)
+                    }
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmation = false }) { Text("Cancel") }
+            }
+        )
     }
 }
 
