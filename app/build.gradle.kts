@@ -45,7 +45,7 @@ android {
     buildTypes {
         release {
             optimization {
-                enable = false
+                enable = true
             }
             if (keystorePropertiesFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
