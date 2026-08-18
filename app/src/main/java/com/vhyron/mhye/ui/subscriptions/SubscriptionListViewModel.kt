@@ -7,16 +7,16 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.vhyron.mhye.data.AppDatabase
-import com.vhyron.mhye.data.Category
 import com.vhyron.mhye.data.CategoryDao
-import com.vhyron.mhye.data.MonthlySpend
 import com.vhyron.mhye.data.Subscription
 import com.vhyron.mhye.data.SubscriptionDao
+import com.vhyron.mhye.data.monthlyCost
 import com.vhyron.mhye.data.monthlySpend
 import com.vhyron.mhye.reminders.ReminderScheduler
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -26,30 +26,48 @@ class SubscriptionListViewModel(
     categoryDao: CategoryDao
 ) : ViewModel() {
 
-    /** Soonest renewal first — the DAO query already applies that ordering. */
-    val subscriptions: StateFlow<List<Subscription>> = subscriptionDao.observeAll()
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
-            initialValue = emptyList()
-        )
+    private val sortOrder = MutableStateFlow(SortOrder.RENEWAL_DATE)
+    private val statusFilter = MutableStateFlow<String?>(null)
+    private val categoryFilter = MutableStateFlow<Int?>(null)
 
-    /** Monthly-equivalent spend per currency, derived from the same query. */
-    val monthlySpend: StateFlow<List<MonthlySpend>> = subscriptions
-        .map { monthlySpend(it) }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
-            initialValue = emptyList()
-        )
+    val uiState: StateFlow<SubscriptionListUiState> = combine(
+        subscriptionDao.observeAll(),
+        categoryDao.observeAll(),
+        sortOrder,
+        statusFilter,
+        categoryFilter
+    ) { all, categories, order, status, category ->
+        val visible = all
+            .filter { status == null || it.status == status }
+            .filter { category == null || it.categoryId == category }
+            .sortedWith(comparatorFor(order))
 
-    /** Backs the category dropdown in the add/edit sheet. */
-    val categories: StateFlow<List<Category>> = categoryDao.observeAll()
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
-            initialValue = emptyList()
+        SubscriptionListUiState(
+            subscriptions = visible,
+            monthlySpend = monthlySpend(visible),
+            categories = categories,
+            sortOrder = order,
+            statusFilter = status,
+            categoryFilter = category,
+            hasAnySubscriptions = all.isNotEmpty()
         )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
+        initialValue = SubscriptionListUiState()
+    )
+
+    fun setSortOrder(order: SortOrder) {
+        sortOrder.value = order
+    }
+
+    fun setStatusFilter(status: String?) {
+        statusFilter.value = status
+    }
+
+    fun setCategoryFilter(categoryId: Int?) {
+        categoryFilter.value = categoryId
+    }
 
     fun addSubscription(subscription: Subscription) {
         viewModelScope.launch {
@@ -72,6 +90,13 @@ class SubscriptionListViewModel(
             subscriptionDao.delete(subscription)
             ReminderScheduler.cancel(application, subscription.id)
         }
+    }
+
+    private fun comparatorFor(order: SortOrder): Comparator<Subscription> = when (order) {
+        SortOrder.RENEWAL_DATE -> compareBy { it.renewalDate }
+        SortOrder.NAME -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+        // Monthly-equivalent so cycles are comparable; unparseable cycles sink.
+        SortOrder.MONTHLY_COST -> compareByDescending { it.monthlyCost() ?: 0.0 }
     }
 
     companion object {
