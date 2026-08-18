@@ -15,6 +15,8 @@ data class SubscriptionListUiState(
     val subscriptions: List<Subscription> = emptyList(),
     val monthlySpend: List<MonthlySpend> = emptyList(),
     val categories: List<Category> = emptyList(),
+    /** Subscriptions per category id, counted across *all* rows, not the filtered set. */
+    val categoryUsage: Map<Int, Int> = emptyMap(),
     val sortOrder: SortOrder = SortOrder.RENEWAL_DATE,
     val statusFilter: String? = null,
     val categoryFilter: Int? = null,

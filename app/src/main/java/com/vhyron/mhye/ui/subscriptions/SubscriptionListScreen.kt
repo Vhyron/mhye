@@ -1,6 +1,5 @@
 package com.vhyron.mhye.ui.subscriptions
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,10 +14,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -27,6 +26,7 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -40,14 +40,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.core.graphics.toColorInt
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.vhyron.mhye.data.BillingCycle
@@ -56,6 +53,8 @@ import com.vhyron.mhye.data.MonthlySpend
 import com.vhyron.mhye.data.Subscription
 import com.vhyron.mhye.data.SubscriptionStatus
 import com.vhyron.mhye.data.monthlySpend
+import com.vhyron.mhye.ui.categories.CategoryDot
+import com.vhyron.mhye.ui.categories.ManageCategoriesSheet
 import com.vhyron.mhye.ui.theme.MhyeTheme
 
 @Composable
@@ -66,9 +65,11 @@ fun SubscriptionListScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showSheet by rememberSaveable { mutableStateOf(false) }
     var editingId by rememberSaveable { mutableStateOf<Int?>(null) }
+    var showCategories by rememberSaveable { mutableStateOf(false) }
 
     SubscriptionListScreen(
         uiState = uiState,
+        onManageCategoriesClick = { showCategories = true },
         onAddClick = {
             editingId = null
             showSheet = true
@@ -104,12 +105,23 @@ fun SubscriptionListScreen(
             }
         )
     }
+
+    if (showCategories) {
+        ManageCategoriesSheet(
+            categories = uiState.categories,
+            categoryUsage = uiState.categoryUsage,
+            onDismiss = { showCategories = false },
+            onSave = viewModel::saveCategory,
+            onDelete = viewModel::deleteCategory
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SubscriptionListScreen(
     uiState: SubscriptionListUiState,
+    onManageCategoriesClick: () -> Unit,
     onAddClick: () -> Unit,
     onSubscriptionClick: (Subscription) -> Unit,
     onSortOrderChange: (SortOrder) -> Unit,
@@ -121,7 +133,12 @@ private fun SubscriptionListScreen(
 
     Scaffold(
         modifier = modifier,
-        topBar = { TopAppBar(title = { Text("Subscriptions") }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("Subscriptions") },
+                actions = { OverflowMenu(onManageCategoriesClick = onManageCategoriesClick) }
+            )
+        },
         floatingActionButton = {
             FloatingActionButton(onClick = onAddClick) {
                 Icon(Icons.Default.Add, contentDescription = "Add subscription")
@@ -157,6 +174,24 @@ private fun SubscriptionListScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun OverflowMenu(onManageCategoriesClick: () -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+
+    IconButton(onClick = { expanded = true }) {
+        Icon(Icons.Default.MoreVert, contentDescription = "More options")
+    }
+    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenuItem(
+            text = { Text("Manage categories") },
+            onClick = {
+                expanded = false
+                onManageCategoriesClick()
+            }
+        )
     }
 }
 
@@ -338,17 +373,6 @@ private fun SubscriptionRow(
 }
 
 @Composable
-private fun CategoryDot(colorHex: String?, modifier: Modifier = Modifier) {
-    val color = remember(colorHex) { parseCategoryColor(colorHex) }
-    Box(
-        modifier = modifier
-            .size(14.dp)
-            .clip(CircleShape)
-            .background(color)
-    )
-}
-
-@Composable
 private fun EmptyState(hasAnySubscriptions: Boolean, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
@@ -374,10 +398,6 @@ private fun sortLabel(order: SortOrder): String = when (order) {
     SortOrder.NAME -> "Name"
     SortOrder.MONTHLY_COST -> "Monthly cost"
 }
-
-/** Falls back to grey rather than crashing on a malformed stored hex. */
-private fun parseCategoryColor(colorHex: String?): Color =
-    colorHex?.let { hex -> runCatching { Color(hex.toColorInt()) }.getOrNull() } ?: Color.Gray
 
 @Preview(showBackground = true)
 @Composable
@@ -426,8 +446,10 @@ private fun SubscriptionListPreview() {
                 subscriptions = sample,
                 monthlySpend = monthlySpend(sample),
                 categories = categories,
+                categoryUsage = sample.groupingBy { it.categoryId }.eachCount(),
                 hasAnySubscriptions = true
             ),
+            onManageCategoriesClick = {},
             onAddClick = {},
             onSubscriptionClick = {},
             onSortOrderChange = {},
