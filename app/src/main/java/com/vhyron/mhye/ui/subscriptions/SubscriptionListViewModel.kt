@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.vhyron.mhye.data.AppDatabase
+import com.vhyron.mhye.data.Category
 import com.vhyron.mhye.data.CategoryDao
 import com.vhyron.mhye.data.Subscription
 import com.vhyron.mhye.data.SubscriptionDao
@@ -23,7 +24,7 @@ import kotlinx.coroutines.launch
 class SubscriptionListViewModel(
     private val application: Application,
     private val subscriptionDao: SubscriptionDao,
-    categoryDao: CategoryDao
+    private val categoryDao: CategoryDao
 ) : ViewModel() {
 
     private val sortOrder = MutableStateFlow(SortOrder.RENEWAL_DATE)
@@ -46,6 +47,7 @@ class SubscriptionListViewModel(
             subscriptions = visible,
             monthlySpend = monthlySpend(visible),
             categories = categories,
+            categoryUsage = all.groupingBy { it.categoryId }.eachCount(),
             sortOrder = order,
             statusFilter = status,
             categoryFilter = category,
@@ -90,6 +92,21 @@ class SubscriptionListViewModel(
             subscriptionDao.delete(subscription)
             ReminderScheduler.cancel(application, subscription.id)
         }
+    }
+
+    /** Inserts when [category] has the default id of 0, updates otherwise. */
+    fun saveCategory(category: Category) {
+        viewModelScope.launch {
+            if (category.id == 0) {
+                categoryDao.insert(category)
+            } else {
+                categoryDao.update(category)
+            }
+        }
+    }
+
+    fun deleteCategory(category: Category) {
+        viewModelScope.launch { categoryDao.delete(category) }
     }
 
     private fun comparatorFor(order: SortOrder): Comparator<Subscription> = when (order) {
