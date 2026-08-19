@@ -2,6 +2,7 @@ package com.vhyron.mhye.ui.subscriptions
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -20,6 +21,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.Badge
+import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -30,6 +33,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -42,6 +46,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -69,11 +74,12 @@ fun SubscriptionListScreen(
     var editingId by rememberSaveable { mutableStateOf<Int?>(null) }
     var showCategories by rememberSaveable { mutableStateOf(false) }
     var showFilters by rememberSaveable { mutableStateOf(false) }
+    var showSort by rememberSaveable { mutableStateOf(false) }
 
     SubscriptionListScreen(
         uiState = uiState,
         onManageCategoriesClick = { showCategories = true },
-        onSortOrderChange = viewModel::setSortOrder,
+        onSortClick = { showSort = true },
         onFiltersClick = { showFilters = true },
         onAddClick = {
             editingId = null
@@ -85,6 +91,14 @@ fun SubscriptionListScreen(
         },
         modifier = modifier
     )
+
+    if (showSort) {
+        SortSheet(
+            sortOrder = uiState.sortOrder,
+            onSortOrderChange = viewModel::setSortOrder,
+            onDismiss = { showSort = false }
+        )
+    }
 
     if (showFilters) {
         FiltersSheet(
@@ -135,7 +149,7 @@ private fun SubscriptionListScreen(
     onManageCategoriesClick: () -> Unit,
     onAddClick: () -> Unit,
     onSubscriptionClick: (Subscription) -> Unit,
-    onSortOrderChange: (SortOrder) -> Unit,
+    onSortClick: () -> Unit,
     onFiltersClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -153,11 +167,12 @@ private fun SubscriptionListScreen(
                         Text("Subscriptions")
                         // Counts what's on screen, so it tracks the filters.
                         if (uiState.hasAnySubscriptions) {
-                            Text(
-                                text = uiState.subscriptions.size.toString(),
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Badge(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            ) {
+                                Text(uiState.subscriptions.size.toString())
+                            }
                         }
                     }
                 },
@@ -178,22 +193,23 @@ private fun SubscriptionListScreen(
 
             ListControls(
                 uiState = uiState,
-                onSortOrderChange = onSortOrderChange,
+                onSortClick = onSortClick,
                 onFiltersClick = onFiltersClick
             )
-            HorizontalDivider()
 
             if (uiState.subscriptions.isEmpty()) {
                 EmptyState(hasAnySubscriptions = uiState.hasAnySubscriptions)
             } else {
-                LazyColumn {
+                LazyColumn(
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     items(uiState.subscriptions, key = { it.id }) { subscription ->
                         SubscriptionRow(
                             subscription = subscription,
                             category = categoriesById[subscription.categoryId],
                             onClick = { onSubscriptionClick(subscription) }
                         )
-                        HorizontalDivider()
                     }
                 }
             }
@@ -222,28 +238,32 @@ private fun OverflowMenu(onManageCategoriesClick: () -> Unit) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SpendSummary(monthlySpend: List<MonthlySpend>, modifier: Modifier = Modifier) {
-    Column(
+    Card(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        Text(
-            text = "Monthly spend",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        // Side by side, wrapping if there are more currencies than fit —
-        // they're never summed, since nothing converts between them.
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(20.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            monthlySpend.forEach { spend ->
-                Text(
-                    text = formatAmount(spend.currency, spend.amount),
-                    style = MaterialTheme.typography.headlineSmall
-                )
+            Text(
+                text = "Monthly spend",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            // Side by side, wrapping if there are more currencies than fit —
+            // they're never summed, since nothing converts between them.
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(20.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                monthlySpend.forEach { spend ->
+                    Text(
+                        text = formatAmount(spend.currency, spend.amount),
+                        style = MaterialTheme.typography.headlineSmall
+                    )
+                }
             }
         }
     }
@@ -252,7 +272,7 @@ private fun SpendSummary(monthlySpend: List<MonthlySpend>, modifier: Modifier = 
 @Composable
 private fun ListControls(
     uiState: SubscriptionListUiState,
-    onSortOrderChange: (SortOrder) -> Unit,
+    onSortClick: () -> Unit,
     onFiltersClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -274,46 +294,27 @@ private fun ListControls(
             },
             label = { Text("Filters") }
         )
-        SortChip(sortOrder = uiState.sortOrder, onSortOrderChange = onSortOrderChange)
+        SortChip(sortOrder = uiState.sortOrder, onClick = onSortClick)
     }
 }
 
 /** Labelled with the active sort so it never needs opening to check. */
 @Composable
-private fun SortChip(sortOrder: SortOrder, onSortOrderChange: (SortOrder) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Box {
-        FilterChip(
-            selected = false,
-            onClick = { expanded = true },
-            label = {
-                Text(
-                    text = sortLabel(sortOrder),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            },
-            trailingIcon = {
-                Icon(
-                    imageVector = Icons.Default.ArrowDropDown,
-                    contentDescription = null,
-                    modifier = Modifier.size(FilterChipDefaults.IconSize)
-                )
-            }
-        )
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            SortOrder.entries.forEach { order ->
-                DropdownMenuItem(
-                    text = { Text(sortLabel(order)) },
-                    onClick = {
-                        onSortOrderChange(order)
-                        expanded = false
-                    }
-                )
-            }
+private fun SortChip(sortOrder: SortOrder, onClick: () -> Unit) {
+    FilterChip(
+        selected = false,
+        onClick = onClick,
+        label = {
+            Text(text = sortLabel(sortOrder), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        },
+        trailingIcon = {
+            Icon(
+                imageVector = Icons.Default.ArrowDropDown,
+                contentDescription = null,
+                modifier = Modifier.size(FilterChipDefaults.IconSize)
+            )
         }
-    }
+    )
 }
 
 @Composable
@@ -330,25 +331,27 @@ private fun SubscriptionRow(
         "Renews ${formatRenewalDate(subscription.renewalDate)}"
     )
 
-    ListItem(
-        modifier = modifier.clickable(onClick = onClick),
-        leadingContent = { CategoryDot(category?.colorHex) },
-        overlineContent = category?.let { { Text(it.name) } },
-        headlineContent = {
-            Text(
-                text = subscription.name,
-                textDecoration = if (isCancelled) TextDecoration.LineThrough else null
-            )
-        },
-        supportingContent = { Text(details.joinToString(" · ")) },
-        trailingContent = {
-            Text(
-                text = formatCost(subscription),
-                style = MaterialTheme.typography.titleMedium,
-                textDecoration = if (isCancelled) TextDecoration.LineThrough else null
-            )
-        }
-    )
+    Card(modifier = modifier.fillMaxWidth(), onClick = onClick) {
+        ListItem(
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            leadingContent = { CategoryDot(category?.colorHex) },
+            overlineContent = category?.let { { Text(it.name) } },
+            headlineContent = {
+                Text(
+                    text = subscription.name,
+                    textDecoration = if (isCancelled) TextDecoration.LineThrough else null
+                )
+            },
+            supportingContent = { Text(details.joinToString(" · ")) },
+            trailingContent = {
+                Text(
+                    text = formatCost(subscription),
+                    style = MaterialTheme.typography.titleMedium,
+                    textDecoration = if (isCancelled) TextDecoration.LineThrough else null
+                )
+            }
+        )
+    }
 }
 
 @Composable
@@ -425,7 +428,7 @@ private fun SubscriptionListPreview() {
             onManageCategoriesClick = {},
             onAddClick = {},
             onSubscriptionClick = {},
-            onSortOrderChange = {},
+            onSortClick = {},
             onFiltersClick = {}
         )
     }
