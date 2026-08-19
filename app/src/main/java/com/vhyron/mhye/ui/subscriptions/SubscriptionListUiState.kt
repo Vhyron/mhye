@@ -22,4 +22,8 @@ data class SubscriptionListUiState(
     val categoryFilter: Int? = null,
     /** Distinguishes "nothing added yet" from "nothing matches the filter". */
     val hasAnySubscriptions: Boolean = false
-)
+) {
+    /** Sort isn't counted — it always has a value, so it's never "active". */
+    val activeFilterCount: Int
+        get() = listOfNotNull(statusFilter, categoryFilter).size
+}
