@@ -22,10 +22,10 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -79,7 +79,7 @@ fun ManageCategoriesSheet(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 24.dp, end = 12.dp, bottom = 8.dp)
+                    .padding(start = 24.dp, end = 24.dp, bottom = 8.dp)
             ) {
                 Text(
                     text = "Categories",
@@ -102,7 +102,6 @@ fun ManageCategoriesSheet(
                     onClick = { editing = category },
                     onDelete = { pendingDelete = category }
                 )
-                HorizontalDivider()
             }
         }
     }
@@ -152,7 +151,11 @@ private fun CategoryRow(
     onDelete: () -> Unit
 ) {
     ListItem(
-        modifier = Modifier.clickable(onClick = onClick),
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            // ListItem pads content by 16dp; +8 lines it up with the header.
+            .padding(horizontal = 8.dp),
         leadingContent = { CategoryDot(category.colorHex) },
         headlineContent = {
             Text(category.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
