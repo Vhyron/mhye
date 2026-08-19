@@ -14,15 +14,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -36,6 +36,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -157,6 +158,7 @@ private fun SubscriptionListScreen(
 
     Scaffold(
         modifier = modifier,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         topBar = {
             TopAppBar(
                 title = {
@@ -167,11 +169,19 @@ private fun SubscriptionListScreen(
                         Text("Subscriptions")
                         // Counts what's on screen, so it tracks the filters.
                         if (uiState.hasAnySubscriptions) {
-                            Badge(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.secondaryContainer,
                                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                             ) {
-                                Text(uiState.subscriptions.size.toString())
+                                Text(
+                                    text = uiState.subscriptions.size.toString(),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    modifier = Modifier.padding(
+                                        horizontal = 12.dp,
+                                        vertical = 3.dp
+                                    )
+                                )
                             }
                         }
                     }
@@ -241,7 +251,10 @@ private fun SpendSummary(monthlySpend: List<MonthlySpend>, modifier: Modifier = 
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        )
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -306,13 +319,6 @@ private fun SortChip(sortOrder: SortOrder, onClick: () -> Unit) {
         onClick = onClick,
         label = {
             Text(text = sortLabel(sortOrder), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        },
-        trailingIcon = {
-            Icon(
-                imageVector = Icons.Default.ArrowDropDown,
-                contentDescription = null,
-                modifier = Modifier.size(FilterChipDefaults.IconSize)
-            )
         }
     )
 }
@@ -331,7 +337,13 @@ private fun SubscriptionRow(
         "Renews ${formatRenewalDate(subscription.renewalDate)}"
     )
 
-    Card(modifier = modifier.fillMaxWidth(), onClick = onClick) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        onClick = onClick,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        )
+    ) {
         ListItem(
             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             leadingContent = { CategoryDot(category?.colorHex) },
