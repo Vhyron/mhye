@@ -4,6 +4,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -143,7 +145,22 @@ private fun SubscriptionListScreen(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text("Subscriptions") },
+                title = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text("Subscriptions")
+                        // Counts what's on screen, so it tracks the filters.
+                        if (uiState.hasAnySubscriptions) {
+                            Text(
+                                text = uiState.subscriptions.size.toString(),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                },
                 actions = { OverflowMenu(onManageCategoriesClick = onManageCategoriesClick) }
             )
         },
@@ -202,6 +219,7 @@ private fun OverflowMenu(onManageCategoriesClick: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SpendSummary(monthlySpend: List<MonthlySpend>, modifier: Modifier = Modifier) {
     Column(
@@ -215,12 +233,18 @@ private fun SpendSummary(monthlySpend: List<MonthlySpend>, modifier: Modifier = 
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        // One line per currency — costs are never converted between them.
-        monthlySpend.forEach { spend ->
-            Text(
-                text = formatAmount(spend.currency, spend.amount),
-                style = MaterialTheme.typography.headlineSmall
-            )
+        // Side by side, wrapping if there are more currencies than fit —
+        // they're never summed, since nothing converts between them.
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            monthlySpend.forEach { spend ->
+                Text(
+                    text = formatAmount(spend.currency, spend.amount),
+                    style = MaterialTheme.typography.headlineSmall
+                )
+            }
         }
     }
 }
@@ -233,10 +257,11 @@ private fun ListControls(
     modifier: Modifier = Modifier
 ) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
     ) {
-        SortChip(sortOrder = uiState.sortOrder, onSortOrderChange = onSortOrderChange)
         FilterChip(
             selected = uiState.activeFilterCount > 0,
             onClick = onFiltersClick,
@@ -249,6 +274,7 @@ private fun ListControls(
             },
             label = { Text("Filters") }
         )
+        SortChip(sortOrder = uiState.sortOrder, onSortOrderChange = onSortOrderChange)
     }
 }
 
