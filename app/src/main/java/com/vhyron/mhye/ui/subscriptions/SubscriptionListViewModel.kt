@@ -1,12 +1,15 @@
 package com.vhyron.mhye.ui.subscriptions
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.vhyron.mhye.data.AppDatabase
+import com.vhyron.mhye.data.BackupRepository
+import com.vhyron.mhye.data.BackupResult
 import com.vhyron.mhye.data.Category
 import com.vhyron.mhye.data.CategoryDao
 import com.vhyron.mhye.data.Subscription
@@ -15,6 +18,7 @@ import com.vhyron.mhye.data.monthlyCost
 import com.vhyron.mhye.data.monthlySpend
 import com.vhyron.mhye.reminders.ReminderScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -24,7 +28,8 @@ import kotlinx.coroutines.launch
 class SubscriptionListViewModel(
     private val application: Application,
     private val subscriptionDao: SubscriptionDao,
-    private val categoryDao: CategoryDao
+    private val categoryDao: CategoryDao,
+    private val backupRepository: BackupRepository
 ) : ViewModel() {
 
     private val sortOrder = MutableStateFlow(SortOrder.RENEWAL_DATE)
@@ -109,6 +114,33 @@ class SubscriptionListViewModel(
         viewModelScope.launch { categoryDao.delete(category) }
     }
 
+    /** One-shot outcome for the UI to surface, cleared once shown. */
+    private val _backupResult = MutableStateFlow<BackupResult?>(null)
+    val backupResult: StateFlow<BackupResult?> = _backupResult
+
+    fun exportTo(destination: Uri) {
+        viewModelScope.launch { _backupResult.value = backupRepository.export(destination) }
+    }
+
+    fun importFrom(source: Uri) {
+        viewModelScope.launch {
+            val result = backupRepository.import(source)
+            // Reminders were scheduled against ids that no longer exist.
+            if (result is BackupResult.Imported) rescheduleAllReminders()
+            _backupResult.value = result
+        }
+    }
+
+    fun clearBackupResult() {
+        _backupResult.value = null
+    }
+
+    private suspend fun rescheduleAllReminders() {
+        subscriptionDao.observeAll().first().forEach { subscription ->
+            ReminderScheduler.schedule(application, subscription)
+        }
+    }
+
     private fun comparatorFor(order: SortOrder): Comparator<Subscription> = when (order) {
         SortOrder.RENEWAL_DATE -> compareBy { it.renewalDate }
         SortOrder.NAME -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }
@@ -126,7 +158,8 @@ class SubscriptionListViewModel(
                 SubscriptionListViewModel(
                     application,
                     database.subscriptionDao(),
-                    database.categoryDao()
+                    database.categoryDao(),
+                    BackupRepository(application, database)
                 )
             }
         }

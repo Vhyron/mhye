@@ -1,5 +1,16 @@
 package com.vhyron.mhye.ui.subscriptions
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
+import com.vhyron.mhye.data.BackupResult
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
@@ -77,10 +88,33 @@ fun SubscriptionListScreen(
     var showCategories by rememberSaveable { mutableStateOf(false) }
     var showFilters by rememberSaveable { mutableStateOf(false) }
     var showSort by rememberSaveable { mutableStateOf(false) }
+    var pendingImport by rememberSaveable { mutableStateOf<Uri?>(null) }
+
+    val backupResult by viewModel.backupResult.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri -> uri?.let(viewModel::exportTo) }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> pendingImport = uri }
+
+    // Surface the outcome once, then clear it so rotation doesn't repeat it.
+    LaunchedEffect(backupResult) {
+        backupResult?.let {
+            snackbarHostState.showSnackbar(backupMessage(it))
+            viewModel.clearBackupResult()
+        }
+    }
 
     SubscriptionListScreen(
         uiState = uiState,
         onManageCategoriesClick = { showCategories = true },
+        onExportClick = { exportLauncher.launch(defaultBackupFileName()) },
+        onImportClick = { importLauncher.launch(arrayOf("application/json")) },
+        snackbarHostState = snackbarHostState,
         onSortClick = { showSort = true },
         onFiltersClick = { showFilters = true },
         onAddClick = {
@@ -93,6 +127,32 @@ fun SubscriptionListScreen(
         },
         modifier = modifier
     )
+
+    pendingImport?.let { uri ->
+        AlertDialog(
+            onDismissRequest = { pendingImport = null },
+            title = { Text("Restore this backup?") },
+            text = {
+                Text(
+                    "Everything currently in Mhye will be replaced by the " +
+                        "contents of this file. This can't be undone."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.importFrom(uri)
+                        pendingImport = null
+                    }
+                ) {
+                    Text("Restore", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingImport = null }) { Text("Cancel") }
+            }
+        )
+    }
 
     if (showSort) {
         SortSheet(
@@ -149,6 +209,9 @@ fun SubscriptionListScreen(
 private fun SubscriptionListScreen(
     uiState: SubscriptionListUiState,
     onManageCategoriesClick: () -> Unit,
+    onExportClick: () -> Unit,
+    onImportClick: () -> Unit,
+    snackbarHostState: SnackbarHostState,
     onAddClick: () -> Unit,
     onSubscriptionClick: (Subscription) -> Unit,
     onSortClick: () -> Unit,
@@ -160,6 +223,7 @@ private fun SubscriptionListScreen(
     Scaffold(
         modifier = modifier,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -187,7 +251,13 @@ private fun SubscriptionListScreen(
                         }
                     }
                 },
-                actions = { OverflowMenu(onManageCategoriesClick = onManageCategoriesClick) },
+                actions = {
+                    OverflowMenu(
+                        onManageCategoriesClick = onManageCategoriesClick,
+                        onExportClick = onExportClick,
+                        onImportClick = onImportClick
+                    )
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                 )
@@ -232,7 +302,11 @@ private fun SubscriptionListScreen(
 }
 
 @Composable
-private fun OverflowMenu(onManageCategoriesClick: () -> Unit) {
+private fun OverflowMenu(
+    onManageCategoriesClick: () -> Unit,
+    onExportClick: () -> Unit,
+    onImportClick: () -> Unit
+) {
     var expanded by remember { mutableStateOf(false) }
 
     IconButton(onClick = { expanded = true }) {
@@ -246,7 +320,33 @@ private fun OverflowMenu(onManageCategoriesClick: () -> Unit) {
                 onManageCategoriesClick()
             }
         )
+        DropdownMenuItem(
+            text = { Text("Export backup") },
+            onClick = {
+                expanded = false
+                onExportClick()
+            }
+        )
+        DropdownMenuItem(
+            text = { Text("Restore backup") },
+            onClick = {
+                expanded = false
+                onImportClick()
+            }
+        )
     }
+}
+
+private fun defaultBackupFileName(): String {
+    val stamp = DateTimeFormatter.ofPattern("yyyy-MM-dd").format(LocalDate.now())
+    return "mhye-backup-$stamp.json"
+}
+
+private fun backupMessage(result: BackupResult): String = when (result) {
+    is BackupResult.Exported -> "Exported ${result.subscriptions} subscriptions"
+    is BackupResult.Imported ->
+        "Restored ${result.subscriptions} subscriptions in ${result.categories} categories"
+    is BackupResult.Failed -> result.reason
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -442,6 +542,9 @@ private fun SubscriptionListPreview() {
                 hasAnySubscriptions = true
             ),
             onManageCategoriesClick = {},
+            onExportClick = {},
+            onImportClick = {},
+            snackbarHostState = remember { SnackbarHostState() },
             onAddClick = {},
             onSubscriptionClick = {},
             onSortClick = {},
