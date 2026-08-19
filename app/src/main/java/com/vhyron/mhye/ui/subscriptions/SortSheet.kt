@@ -46,10 +46,14 @@ fun SortSheet(
             SortOrder.entries.forEach { order ->
                 ListItem(
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    modifier = Modifier.clickable {
-                        onSortOrderChange(order)
-                        onDismiss()
-                    },
+                    modifier = Modifier
+                        .clickable {
+                            onSortOrderChange(order)
+                            onDismiss()
+                        }
+                        // ListItem pads content by 16dp; +8 lines it up with
+                        // the 24dp section label above.
+                        .padding(horizontal = 8.dp),
                     headlineContent = { Text(sortLabel(order)) },
                     trailingContent = {
                         if (order == sortOrder) {
