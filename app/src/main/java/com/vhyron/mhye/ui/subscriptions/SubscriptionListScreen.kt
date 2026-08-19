@@ -5,8 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -16,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
@@ -66,10 +66,13 @@ fun SubscriptionListScreen(
     var showSheet by rememberSaveable { mutableStateOf(false) }
     var editingId by rememberSaveable { mutableStateOf<Int?>(null) }
     var showCategories by rememberSaveable { mutableStateOf(false) }
+    var showFilters by rememberSaveable { mutableStateOf(false) }
 
     SubscriptionListScreen(
         uiState = uiState,
         onManageCategoriesClick = { showCategories = true },
+        onSortOrderChange = viewModel::setSortOrder,
+        onFiltersClick = { showFilters = true },
         onAddClick = {
             editingId = null
             showSheet = true
@@ -78,11 +81,17 @@ fun SubscriptionListScreen(
             editingId = subscription.id
             showSheet = true
         },
-        onSortOrderChange = viewModel::setSortOrder,
-        onStatusFilterChange = viewModel::setStatusFilter,
-        onCategoryFilterChange = viewModel::setCategoryFilter,
         modifier = modifier
     )
+
+    if (showFilters) {
+        FiltersSheet(
+            uiState = uiState,
+            onStatusFilterChange = viewModel::setStatusFilter,
+            onCategoryFilterChange = viewModel::setCategoryFilter,
+            onDismiss = { showFilters = false }
+        )
+    }
 
     if (showSheet) {
         // Resolved from the list so the sheet tracks the latest stored values.
@@ -125,8 +134,7 @@ private fun SubscriptionListScreen(
     onAddClick: () -> Unit,
     onSubscriptionClick: (Subscription) -> Unit,
     onSortOrderChange: (SortOrder) -> Unit,
-    onStatusFilterChange: (String?) -> Unit,
-    onCategoryFilterChange: (Int?) -> Unit,
+    onFiltersClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val categoriesById = remember(uiState.categories) { uiState.categories.associateBy { it.id } }
@@ -151,11 +159,10 @@ private fun SubscriptionListScreen(
                 SpendSummary(uiState.monthlySpend)
             }
 
-            FilterBar(
+            ListControls(
                 uiState = uiState,
                 onSortOrderChange = onSortOrderChange,
-                onStatusFilterChange = onStatusFilterChange,
-                onCategoryFilterChange = onCategoryFilterChange
+                onFiltersClick = onFiltersClick
             )
             HorizontalDivider()
 
@@ -218,109 +225,47 @@ private fun SpendSummary(monthlySpend: List<MonthlySpend>, modifier: Modifier = 
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun FilterBar(
+private fun ListControls(
     uiState: SubscriptionListUiState,
     onSortOrderChange: (SortOrder) -> Unit,
-    onStatusFilterChange: (String?) -> Unit,
-    onCategoryFilterChange: (Int?) -> Unit,
+    onFiltersClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val selectedCategory = uiState.categories.firstOrNull { it.id == uiState.categoryFilter }
-
-    // Wraps to a second line rather than scrolling chips off-screen, so every
-    // filter stays reachable on narrow displays and with long category names.
-    FlowRow(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+    Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        modifier = modifier.padding(horizontal = 16.dp, vertical = 4.dp)
     ) {
-        MenuChip(label = sortLabel(uiState.sortOrder), active = false) { dismiss ->
-            SortOrder.entries.forEach { order ->
-                DropdownMenuItem(
-                    text = { Text(sortLabel(order)) },
-                    onClick = {
-                        onSortOrderChange(order)
-                        dismiss()
-                    }
+        SortChip(sortOrder = uiState.sortOrder, onSortOrderChange = onSortOrderChange)
+        FilterChip(
+            selected = uiState.activeFilterCount > 0,
+            onClick = onFiltersClick,
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.List,
+                    contentDescription = null,
+                    modifier = Modifier.size(FilterChipDefaults.IconSize)
                 )
-            }
-        }
-
-        MenuChip(
-            label = uiState.statusFilter?.let(::statusLabel) ?: "Any status",
-            active = uiState.statusFilter != null
-        ) { dismiss ->
-            DropdownMenuItem(
-                text = { Text("Any status") },
-                onClick = {
-                    onStatusFilterChange(null)
-                    dismiss()
-                }
-            )
-            listOf(
-                SubscriptionStatus.ACTIVE,
-                SubscriptionStatus.PAUSED,
-                SubscriptionStatus.CANCELLED
-            ).forEach { status ->
-                DropdownMenuItem(
-                    text = { Text(statusLabel(status)) },
-                    onClick = {
-                        onStatusFilterChange(status)
-                        dismiss()
-                    }
-                )
-            }
-        }
-
-        MenuChip(
-            label = selectedCategory?.name ?: "Any category",
-            active = uiState.categoryFilter != null
-        ) { dismiss ->
-            DropdownMenuItem(
-                text = { Text("Any category") },
-                onClick = {
-                    onCategoryFilterChange(null)
-                    dismiss()
-                }
-            )
-            uiState.categories.forEach { category ->
-                DropdownMenuItem(
-                    text = { Text(category.name) },
-                    leadingIcon = { CategoryDot(category.colorHex) },
-                    onClick = {
-                        onCategoryFilterChange(category.id)
-                        dismiss()
-                    }
-                )
-            }
-        }
+            },
+            label = { Text("Filters") }
+        )
     }
 }
 
+/** Labelled with the active sort so it never needs opening to check. */
 @Composable
-private fun MenuChip(
-    label: String,
-    active: Boolean,
-    modifier: Modifier = Modifier,
-    menuContent: @Composable ColumnScope.(dismiss: () -> Unit) -> Unit
-) {
+private fun SortChip(sortOrder: SortOrder, onSortOrderChange: (SortOrder) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
 
-    Box(modifier) {
+    Box {
         FilterChip(
-            selected = active,
+            selected = false,
             onClick = { expanded = true },
             label = {
-                // User-defined category names can be arbitrarily long.
                 Text(
-                    text = label,
+                    text = sortLabel(sortOrder),
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(max = 160.dp)
+                    overflow = TextOverflow.Ellipsis
                 )
             },
             trailingIcon = {
@@ -332,7 +277,15 @@ private fun MenuChip(
             }
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            menuContent { expanded = false }
+            SortOrder.entries.forEach { order ->
+                DropdownMenuItem(
+                    text = { Text(sortLabel(order)) },
+                    onClick = {
+                        onSortOrderChange(order)
+                        expanded = false
+                    }
+                )
+            }
         }
     }
 }
@@ -393,12 +346,6 @@ private fun EmptyState(hasAnySubscriptions: Boolean, modifier: Modifier = Modifi
     }
 }
 
-private fun sortLabel(order: SortOrder): String = when (order) {
-    SortOrder.RENEWAL_DATE -> "Renewal date"
-    SortOrder.NAME -> "Name"
-    SortOrder.MONTHLY_COST -> "Monthly cost"
-}
-
 @Preview(showBackground = true)
 @Composable
 private fun SubscriptionListPreview() {
@@ -453,8 +400,7 @@ private fun SubscriptionListPreview() {
             onAddClick = {},
             onSubscriptionClick = {},
             onSortOrderChange = {},
-            onStatusFilterChange = {},
-            onCategoryFilterChange = {}
+            onFiltersClick = {}
         )
     }
 }
