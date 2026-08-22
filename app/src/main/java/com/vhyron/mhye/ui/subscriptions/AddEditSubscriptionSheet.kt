@@ -48,6 +48,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.vhyron.mhye.data.BillingCycle
 import com.vhyron.mhye.data.Category
+import com.vhyron.mhye.data.REMINDERS_OFF
+import com.vhyron.mhye.data.REMINDER_DAY_OPTIONS
 import com.vhyron.mhye.data.Subscription
 import com.vhyron.mhye.data.SubscriptionStatus
 import java.time.Instant
@@ -79,6 +81,7 @@ private val statusOptions = listOf(
 fun AddEditSubscriptionSheet(
     subscription: Subscription?,
     categories: List<Category>,
+    defaultReminderDays: Int,
     onDismiss: () -> Unit,
     onSave: (Subscription) -> Unit,
     onDelete: (Subscription) -> Unit,
@@ -94,6 +97,7 @@ fun AddEditSubscriptionSheet(
             SubscriptionForm(
                 subscription = subscription,
                 categories = categories,
+                defaultReminderDays = defaultReminderDays,
                 onSave = onSave,
                 onDelete = onDelete
             )
@@ -105,6 +109,7 @@ fun AddEditSubscriptionSheet(
 private fun SubscriptionForm(
     subscription: Subscription?,
     categories: List<Category>,
+    defaultReminderDays: Int,
     onSave: (Subscription) -> Unit,
     onDelete: (Subscription) -> Unit
 ) {
@@ -124,6 +129,9 @@ private fun SubscriptionForm(
     var notes by rememberSaveable { mutableStateOf(subscription?.notes.orEmpty()) }
     var status by rememberSaveable {
         mutableStateOf(subscription?.status ?: SubscriptionStatus.ACTIVE)
+    }
+    var reminderDaysBefore by rememberSaveable {
+        mutableStateOf(subscription?.reminderDaysBefore)
     }
     var showDeleteConfirmation by rememberSaveable { mutableStateOf(false) }
 
@@ -232,6 +240,12 @@ private fun SubscriptionForm(
             onRenewalDateChange = { renewalDate = it }
         )
 
+        ReminderDropdown(
+            reminderDaysBefore = reminderDaysBefore,
+            defaultReminderDays = defaultReminderDays,
+            onReminderChange = { reminderDaysBefore = it }
+        )
+
         OutlinedTextField(
             value = notes,
             onValueChange = { notes = it },
@@ -275,7 +289,8 @@ private fun SubscriptionForm(
                         renewalDate = renewalDate,
                         categoryId = categoryId,
                         status = status,
-                        notes = notes.trim().ifBlank { null }
+                        notes = notes.trim().ifBlank { null },
+                        reminderDaysBefore = reminderDaysBefore
                     )
                 )
             },
@@ -340,6 +355,52 @@ private fun CategoryDropdown(
                     text = { Text(category.name) },
                     onClick = {
                         onCategorySelected(category.id)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+/** Null means "follow the app-wide default", shown as the first option. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReminderDropdown(
+    reminderDaysBefore: Int?,
+    defaultReminderDays: Int,
+    onReminderChange: (Int?) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val useDefaultLabel = "Use default (${reminderLabel(defaultReminderDays).lowercase()})"
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it }
+    ) {
+        OutlinedTextField(
+            value = reminderDaysBefore?.let(::reminderLabel) ?: useDefaultLabel,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("Remind me") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+            modifier = Modifier
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                .fillMaxWidth()
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text(useDefaultLabel) },
+                onClick = {
+                    onReminderChange(null)
+                    expanded = false
+                }
+            )
+            (REMINDER_DAY_OPTIONS + REMINDERS_OFF).forEach { days ->
+                DropdownMenuItem(
+                    text = { Text(reminderLabel(days)) },
+                    onClick = {
+                        onReminderChange(days)
                         expanded = false
                     }
                 )
