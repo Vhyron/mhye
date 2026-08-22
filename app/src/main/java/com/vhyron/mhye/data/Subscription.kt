@@ -23,5 +23,7 @@ data class Subscription(
     val renewalDate: Long,            // epoch millis
     val categoryId: Int,
     val status: String,               // ACTIVE / CANCELLED / PAUSED
-    val notes: String? = null
+    val notes: String? = null,
+    /** Days before renewal to remind; null follows the app-wide default. */
+    val reminderDaysBefore: Int? = null
 )
