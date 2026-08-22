@@ -89,6 +89,8 @@ fun SubscriptionListScreen(
     var showFilters by rememberSaveable { mutableStateOf(false) }
     var showSort by rememberSaveable { mutableStateOf(false) }
     var pendingImport by rememberSaveable { mutableStateOf<Uri?>(null) }
+    var showReminderSettings by rememberSaveable { mutableStateOf(false) }
+    val defaultReminderDays by viewModel.defaultReminderDays.collectAsStateWithLifecycle()
 
     val backupResult by viewModel.backupResult.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -112,6 +114,7 @@ fun SubscriptionListScreen(
     SubscriptionListScreen(
         uiState = uiState,
         onManageCategoriesClick = { showCategories = true },
+        onReminderSettingsClick = { showReminderSettings = true },
         onExportClick = { exportLauncher.launch(defaultBackupFileName()) },
         onImportClick = { importLauncher.launch(arrayOf("application/json")) },
         snackbarHostState = snackbarHostState,
@@ -154,6 +157,14 @@ fun SubscriptionListScreen(
         )
     }
 
+    if (showReminderSettings) {
+        ReminderSettingsSheet(
+            defaultReminderDays = defaultReminderDays,
+            onDefaultReminderDaysChange = viewModel::setDefaultReminderDays,
+            onDismiss = { showReminderSettings = false }
+        )
+    }
+
     if (showSort) {
         SortSheet(
             sortOrder = uiState.sortOrder,
@@ -177,6 +188,7 @@ fun SubscriptionListScreen(
         AddEditSubscriptionSheet(
             subscription = editing,
             categories = uiState.categories,
+            defaultReminderDays = defaultReminderDays,
             onDismiss = { showSheet = false },
             onSave = { subscription ->
                 if (editing == null) {
@@ -209,6 +221,7 @@ fun SubscriptionListScreen(
 private fun SubscriptionListScreen(
     uiState: SubscriptionListUiState,
     onManageCategoriesClick: () -> Unit,
+    onReminderSettingsClick: () -> Unit,
     onExportClick: () -> Unit,
     onImportClick: () -> Unit,
     snackbarHostState: SnackbarHostState,
@@ -254,6 +267,7 @@ private fun SubscriptionListScreen(
                 actions = {
                     OverflowMenu(
                         onManageCategoriesClick = onManageCategoriesClick,
+                        onReminderSettingsClick = onReminderSettingsClick,
                         onExportClick = onExportClick,
                         onImportClick = onImportClick
                     )
@@ -304,6 +318,7 @@ private fun SubscriptionListScreen(
 @Composable
 private fun OverflowMenu(
     onManageCategoriesClick: () -> Unit,
+    onReminderSettingsClick: () -> Unit,
     onExportClick: () -> Unit,
     onImportClick: () -> Unit
 ) {
@@ -318,6 +333,13 @@ private fun OverflowMenu(
             onClick = {
                 expanded = false
                 onManageCategoriesClick()
+            }
+        )
+        DropdownMenuItem(
+            text = { Text("Reminder settings") },
+            onClick = {
+                expanded = false
+                onReminderSettingsClick()
             }
         )
         DropdownMenuItem(
@@ -542,6 +564,7 @@ private fun SubscriptionListPreview() {
                 hasAnySubscriptions = true
             ),
             onManageCategoriesClick = {},
+            onReminderSettingsClick = {},
             onExportClick = {},
             onImportClick = {},
             snackbarHostState = remember { SnackbarHostState() },

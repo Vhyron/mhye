@@ -4,11 +4,14 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.SQLiteConnection
+import androidx.sqlite.execSQL
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [Category::class, Subscription::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -36,6 +39,19 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Adds Subscription.reminderDaysBefore. Existing rows get NULL, which
+         * means "follow the app-wide default" — so behaviour is unchanged for
+         * anyone upgrading.
+         */
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL(
+                    "ALTER TABLE Subscription ADD COLUMN reminderDaysBefore INTEGER DEFAULT NULL"
+                )
+            }
+        }
+
         @Volatile
         private var instance: AppDatabase? = null
 
@@ -47,8 +63,9 @@ abstract class AppDatabase : RoomDatabase() {
         private fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, DATABASE_NAME)
                 .addCallback(SEED_DEFAULT_CATEGORY)
-                // Pre-release: the schema is still moving, so wipe rather than migrate.
-                .fallbackToDestructiveMigration(dropAllTables = true)
+                .addMigrations(MIGRATION_1_2)
+                // No destructive fallback: a missing migration must fail loudly
+                // rather than silently delete someone's subscriptions.
                 .build()
     }
 }

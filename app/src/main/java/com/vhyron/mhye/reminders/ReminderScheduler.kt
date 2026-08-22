@@ -6,7 +6,8 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.vhyron.mhye.data.Subscription
-import com.vhyron.mhye.data.SubscriptionStatus
+import com.vhyron.mhye.data.resolveReminderDays
+import com.vhyron.mhye.data.wantsReminder
 import java.util.concurrent.TimeUnit
 
 /**
@@ -18,17 +19,20 @@ import java.util.concurrent.TimeUnit
  */
 object ReminderScheduler {
 
-    /** How far ahead of the renewal date the reminder fires. */
-    const val DAYS_BEFORE_RENEWAL = 3L
-
-    fun schedule(context: Context, subscription: Subscription) {
-        if (subscription.status != SubscriptionStatus.ACTIVE) {
+    /**
+     * [defaultDaysBefore] is the app-wide setting; a subscription's own
+     * [Subscription.reminderDaysBefore] wins when set. Either may be
+     * [REMINDERS_OFF], which cancels instead of scheduling.
+     */
+    fun schedule(context: Context, subscription: Subscription, defaultDaysBefore: Int) {
+        if (!subscription.wantsReminder(defaultDaysBefore)) {
             cancel(context, subscription.id)
             return
         }
+        val daysBefore = subscription.resolveReminderDays(defaultDaysBefore)
 
         val delayMillis = subscription.renewalDate -
-            TimeUnit.DAYS.toMillis(DAYS_BEFORE_RENEWAL) -
+            TimeUnit.DAYS.toMillis(daysBefore.toLong()) -
             System.currentTimeMillis()
 
         // Renewal is already within the reminder window (or past) — nothing to schedule.

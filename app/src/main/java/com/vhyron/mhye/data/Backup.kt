@@ -17,7 +17,7 @@ data class Backup(
     val subscriptions: List<BackupSubscription>
 ) {
     companion object {
-        const val CURRENT_VERSION = 1
+        const val CURRENT_VERSION = 2
     }
 }
 
@@ -38,7 +38,9 @@ data class BackupSubscription(
     val renewalDate: Long,
     val categoryId: Int,
     val status: String,
-    val notes: String? = null
+    val notes: String? = null,
+    /** Added in backup v2; absent in v1 files, which decode to null. */
+    val reminderDaysBefore: Int? = null
 )
 
 /**
@@ -69,7 +71,8 @@ fun buildBackup(
             renewalDate = it.renewalDate,
             categoryId = it.categoryId,
             status = it.status,
-            notes = it.notes
+            notes = it.notes,
+            reminderDaysBefore = it.reminderDaysBefore
         )
     }
 )
@@ -89,5 +92,6 @@ fun BackupSubscription.toSubscription(categoryIds: Map<Int, Int>) = Subscription
     renewalDate = renewalDate,
     categoryId = categoryIds[categoryId] ?: categoryIds.values.first(),
     status = status,
-    notes = notes
+    notes = notes,
+    reminderDaysBefore = reminderDaysBefore
 )

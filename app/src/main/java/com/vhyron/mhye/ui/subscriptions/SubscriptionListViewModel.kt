@@ -10,6 +10,8 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.vhyron.mhye.data.AppDatabase
 import com.vhyron.mhye.data.BackupRepository
 import com.vhyron.mhye.data.BackupResult
+import com.vhyron.mhye.data.DEFAULT_REMINDER_DAYS
+import com.vhyron.mhye.data.SettingsRepository
 import com.vhyron.mhye.data.Category
 import com.vhyron.mhye.data.CategoryDao
 import com.vhyron.mhye.data.Subscription
@@ -29,8 +31,24 @@ class SubscriptionListViewModel(
     private val application: Application,
     private val subscriptionDao: SubscriptionDao,
     private val categoryDao: CategoryDao,
-    private val backupRepository: BackupRepository
+    private val backupRepository: BackupRepository,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
+
+    val defaultReminderDays: StateFlow<Int> = settingsRepository.defaultReminderDays
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
+            initialValue = DEFAULT_REMINDER_DAYS
+        )
+
+    /** Changing the default re-times every subscription that follows it. */
+    fun setDefaultReminderDays(days: Int) {
+        viewModelScope.launch {
+            settingsRepository.setDefaultReminderDays(days)
+            rescheduleAllReminders()
+        }
+    }
 
     private val sortOrder = MutableStateFlow(SortOrder.RENEWAL_DATE)
     private val statusFilter = MutableStateFlow<String?>(null)
@@ -80,7 +98,11 @@ class SubscriptionListViewModel(
         viewModelScope.launch {
             val id = subscriptionDao.insert(subscription).toInt()
             // Room assigns the id, so schedule against the stored row.
-            ReminderScheduler.schedule(application, subscription.copy(id = id))
+            ReminderScheduler.schedule(
+                application,
+                subscription.copy(id = id),
+                settingsRepository.defaultReminderDays.first()
+            )
         }
     }
 
@@ -88,7 +110,11 @@ class SubscriptionListViewModel(
         viewModelScope.launch {
             subscriptionDao.update(subscription)
             // Replaces the pending reminder, or cancels it if no longer active.
-            ReminderScheduler.schedule(application, subscription)
+            ReminderScheduler.schedule(
+                application,
+                subscription,
+                settingsRepository.defaultReminderDays.first()
+            )
         }
     }
 
@@ -136,8 +162,9 @@ class SubscriptionListViewModel(
     }
 
     private suspend fun rescheduleAllReminders() {
+        val default = settingsRepository.defaultReminderDays.first()
         subscriptionDao.observeAll().first().forEach { subscription ->
-            ReminderScheduler.schedule(application, subscription)
+            ReminderScheduler.schedule(application, subscription, default)
         }
     }
 
@@ -159,7 +186,8 @@ class SubscriptionListViewModel(
                     application,
                     database.subscriptionDao(),
                     database.categoryDao(),
-                    BackupRepository(application, database)
+                    BackupRepository(application, database),
+                    SettingsRepository(application)
                 )
             }
         }
