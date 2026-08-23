@@ -8,6 +8,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -95,6 +96,39 @@ class AppDatabaseTest {
 
         subscriptionDao.delete(updated)
         assertEquals(emptyList<Subscription>(), subscriptionDao.observeAll().first())
+    }
+
+    @Test
+    fun reassignsEverySubscriptionInOneCategory() = runBlocking {
+        val from = categoryDao.insert(Category(name = "From", colorHex = "#FF0000")).toInt()
+        val to = categoryDao.insert(Category(name = "To", colorHex = "#00FF00")).toInt()
+        val untouched = categoryDao.observeAll().first().first { it.id != from && it.id != to }.id
+
+        subscriptionDao.insert(subscription("A", renewalDate = 1L, categoryId = from))
+        subscriptionDao.insert(subscription("B", renewalDate = 2L, categoryId = from))
+        subscriptionDao.insert(subscription("C", renewalDate = 3L, categoryId = untouched))
+
+        subscriptionDao.reassignCategory(fromCategoryId = from, toCategoryId = to)
+
+        val byName = subscriptionDao.observeAll().first().associate { it.name to it.categoryId }
+        assertEquals(to, byName["A"])
+        assertEquals(to, byName["B"])
+        // A subscription in another category must not be swept along.
+        assertEquals(untouched, byName["C"])
+    }
+
+    @Test
+    fun reassigningEmptiesTheCategorySoItCanBeDeleted() = runBlocking {
+        val from = categoryDao.insert(Category(name = "Doomed", colorHex = "#FF0000")).toInt()
+        val to = categoryDao.insert(Category(name = "Survivor", colorHex = "#00FF00")).toInt()
+        subscriptionDao.insert(subscription("A", renewalDate = 1L, categoryId = from))
+
+        subscriptionDao.reassignCategory(from, to)
+        // Would throw SQLiteConstraintException if anything still pointed here.
+        categoryDao.delete(categoryDao.getById(from)!!)
+
+        assertNull(categoryDao.getById(from))
+        assertEquals(to, subscriptionDao.observeAll().first().single().categoryId)
     }
 
     private fun subscription(name: String, renewalDate: Long, categoryId: Int) = Subscription(
