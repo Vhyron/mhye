@@ -211,7 +211,9 @@ fun SubscriptionListScreen(
             categoryUsage = uiState.categoryUsage,
             onDismiss = { showCategories = false },
             onSave = viewModel::saveCategory,
-            onDelete = viewModel::deleteCategory
+            onDelete = { category, reassignTo ->
+                viewModel.deleteCategory(category, reassignTo)
+            }
         )
     }
 }
