@@ -26,8 +26,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.automirrored.filled.List
@@ -60,6 +61,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -237,7 +239,7 @@ private fun SubscriptionListScreen(
 
     Scaffold(
         modifier = modifier,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
@@ -275,7 +277,7 @@ private fun SubscriptionListScreen(
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer
                 )
             )
         },
@@ -302,12 +304,16 @@ private fun SubscriptionListScreen(
             } else {
                 LazyColumn(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(CONNECTED_GAP)
                 ) {
-                    items(uiState.subscriptions, key = { it.id }) { subscription ->
+                    itemsIndexed(
+                        items = uiState.subscriptions,
+                        key = { _, subscription -> subscription.id }
+                    ) { index, subscription ->
                         SubscriptionRow(
                             subscription = subscription,
                             category = categoriesById[subscription.categoryId],
+                            shape = connectedShape(index, uiState.subscriptions.size),
                             onClick = { onSubscriptionClick(subscription) }
                         )
                     }
@@ -380,8 +386,9 @@ private fun SpendSummary(monthlySpend: List<MonthlySpend>, modifier: Modifier = 
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(GROUP_CORNER),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
         )
     ) {
         Column(
@@ -455,6 +462,7 @@ private fun SortChip(sortOrder: SortOrder, onClick: () -> Unit) {
 private fun SubscriptionRow(
     subscription: Subscription,
     category: Category?,
+    shape: Shape,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -468,8 +476,9 @@ private fun SubscriptionRow(
     Card(
         modifier = modifier.fillMaxWidth(),
         onClick = onClick,
+        shape = shape,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
         )
     ) {
         ListItem(
@@ -492,6 +501,28 @@ private fun SubscriptionRow(
             }
         )
     }
+}
+
+/**
+ * Rounding for a run of cards that read as one block, as the system Settings
+ * app does it: only the outer edges of the run are fully rounded, and
+ * neighbours nearly touch.
+ */
+private val GROUP_CORNER = 20.dp
+private val ITEM_CORNER = 4.dp
+private val CONNECTED_GAP = 2.dp
+
+private fun connectedShape(index: Int, count: Int): Shape = when {
+    count == 1 -> RoundedCornerShape(GROUP_CORNER)
+    index == 0 -> RoundedCornerShape(
+        topStart = GROUP_CORNER, topEnd = GROUP_CORNER,
+        bottomStart = ITEM_CORNER, bottomEnd = ITEM_CORNER
+    )
+    index == count - 1 -> RoundedCornerShape(
+        topStart = ITEM_CORNER, topEnd = ITEM_CORNER,
+        bottomStart = GROUP_CORNER, bottomEnd = GROUP_CORNER
+    )
+    else -> RoundedCornerShape(ITEM_CORNER)
 }
 
 @Composable
