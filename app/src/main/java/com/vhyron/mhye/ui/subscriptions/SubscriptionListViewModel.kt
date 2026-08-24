@@ -55,14 +55,25 @@ class SubscriptionListViewModel(
     private val sortOrder = MutableStateFlow(SortOrder.RENEWAL_DATE)
     private val statusFilter = MutableStateFlow<String?>(null)
     private val categoryFilter = MutableStateFlow<Int?>(null)
+    private val groupBy = MutableStateFlow(GroupBy.NONE)
+
+    /** Bundled so the combine below stays within its typed arity. */
+    private data class Controls(
+        val order: SortOrder,
+        val status: String?,
+        val category: Int?,
+        val grouping: GroupBy
+    )
+
+    private val controls = combine(
+        sortOrder, statusFilter, categoryFilter, groupBy, ::Controls
+    )
 
     val uiState: StateFlow<SubscriptionListUiState> = combine(
         subscriptionDao.observeAll(),
         categoryDao.observeAll(),
-        sortOrder,
-        statusFilter,
-        categoryFilter
-    ) { all, categories, order, status, category ->
+        controls
+    ) { all, categories, (order, status, category, grouping) ->
         val visible = all
             .filter { status == null || it.status == status }
             .filter { category == null || it.categoryId == category }
@@ -70,10 +81,12 @@ class SubscriptionListViewModel(
 
         SubscriptionListUiState(
             subscriptions = visible,
+            groups = groupsFor(visible, categories, grouping),
             monthlySpend = monthlySpend(visible),
             categories = categories,
             categoryUsage = all.groupingBy { it.categoryId }.eachCount(),
             sortOrder = order,
+            groupBy = grouping,
             statusFilter = status,
             categoryFilter = category,
             hasAnySubscriptions = all.isNotEmpty()
@@ -86,6 +99,10 @@ class SubscriptionListViewModel(
 
     fun setSortOrder(order: SortOrder) {
         sortOrder.value = order
+    }
+
+    fun setGroupBy(grouping: GroupBy) {
+        groupBy.value = grouping
     }
 
     fun setStatusFilter(status: String?) {
