@@ -15,14 +15,13 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.vhyron.mhye.ui.components.MhyeBottomSheet
 import com.vhyron.mhye.data.SubscriptionStatus
 import com.vhyron.mhye.ui.categories.CategoryDot
 
@@ -40,11 +39,7 @@ fun FiltersSheet(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        modifier = modifier
-    ) {
+    MhyeBottomSheet(onDismissRequest = onDismiss, modifier = modifier) {
         Column(
             modifier = Modifier
                 .verticalScroll(rememberScrollState())

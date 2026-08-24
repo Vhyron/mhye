@@ -10,13 +10,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.vhyron.mhye.ui.components.MhyeBottomSheet
 
 /**
  * A bottom sheet to match the filters one. Sort is single-select, so picking
@@ -30,11 +29,7 @@ fun SortSheet(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        modifier = modifier
-    ) {
+    MhyeBottomSheet(onDismissRequest = onDismiss, modifier = modifier) {
         Column(modifier = Modifier.padding(bottom = 24.dp)) {
             Text(
                 text = "Sort by",
