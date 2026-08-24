@@ -90,6 +90,7 @@ fun SubscriptionListScreen(
     var showCategories by rememberSaveable { mutableStateOf(false) }
     var showFilters by rememberSaveable { mutableStateOf(false) }
     var showSort by rememberSaveable { mutableStateOf(false) }
+    var showGroup by rememberSaveable { mutableStateOf(false) }
     var pendingImport by rememberSaveable { mutableStateOf<Uri?>(null) }
     var showReminderSettings by rememberSaveable { mutableStateOf(false) }
     val defaultReminderDays by viewModel.defaultReminderDays.collectAsStateWithLifecycle()
@@ -121,6 +122,7 @@ fun SubscriptionListScreen(
         onImportClick = { importLauncher.launch(arrayOf("application/json")) },
         snackbarHostState = snackbarHostState,
         onSortClick = { showSort = true },
+        onGroupClick = { showGroup = true },
         onFiltersClick = { showFilters = true },
         onAddClick = {
             editingId = null
@@ -164,6 +166,14 @@ fun SubscriptionListScreen(
             defaultReminderDays = defaultReminderDays,
             onDefaultReminderDaysChange = viewModel::setDefaultReminderDays,
             onDismiss = { showReminderSettings = false }
+        )
+    }
+
+    if (showGroup) {
+        GroupSheet(
+            groupBy = uiState.groupBy,
+            onGroupByChange = viewModel::setGroupBy,
+            onDismiss = { showGroup = false }
         )
     }
 
@@ -232,6 +242,7 @@ private fun SubscriptionListScreen(
     onAddClick: () -> Unit,
     onSubscriptionClick: (Subscription) -> Unit,
     onSortClick: () -> Unit,
+    onGroupClick: () -> Unit,
     onFiltersClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -296,6 +307,7 @@ private fun SubscriptionListScreen(
             ListControls(
                 uiState = uiState,
                 onSortClick = onSortClick,
+                onGroupClick = onGroupClick,
                 onFiltersClick = onFiltersClick
             )
 
@@ -306,16 +318,25 @@ private fun SubscriptionListScreen(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(CONNECTED_GAP)
                 ) {
-                    itemsIndexed(
-                        items = uiState.subscriptions,
-                        key = { _, subscription -> subscription.id }
-                    ) { index, subscription ->
-                        SubscriptionRow(
-                            subscription = subscription,
-                            category = categoriesById[subscription.categoryId],
-                            shape = connectedShape(index, uiState.subscriptions.size),
-                            onClick = { onSubscriptionClick(subscription) }
-                        )
+                    uiState.groups.forEachIndexed { groupIndex, group ->
+                        group.category?.let { category ->
+                            item(key = "header-${category.id}") {
+                                CategoryHeader(category, isFirst = groupIndex == 0)
+                            }
+                        }
+                        itemsIndexed(
+                            items = group.subscriptions,
+                            key = { _, subscription -> subscription.id }
+                        ) { index, subscription ->
+                            SubscriptionRow(
+                                subscription = subscription,
+                                category = categoriesById[subscription.categoryId],
+                                // The header already names the category.
+                                showCategory = group.category == null,
+                                shape = connectedShape(index, group.subscriptions.size),
+                                onClick = { onSubscriptionClick(subscription) }
+                            )
+                        }
                     }
                 }
             }
@@ -418,18 +439,28 @@ private fun SpendSummary(monthlySpend: List<MonthlySpend>, modifier: Modifier = 
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun ListControls(
     uiState: SubscriptionListUiState,
     onSortClick: () -> Unit,
+    onGroupClick: () -> Unit,
     onFiltersClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
+    // Three controls no longer fit every screen width, so let them wrap
+    // rather than clip.
+    FlowRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp)
     ) {
+        FilterChip(
+            selected = uiState.groupBy != GroupBy.NONE,
+            onClick = onGroupClick,
+            label = { Text("Group") }
+        )
         FilterChip(
             selected = uiState.activeFilterCount > 0,
             onClick = onFiltersClick,
@@ -462,6 +493,7 @@ private fun SortChip(sortOrder: SortOrder, onClick: () -> Unit) {
 private fun SubscriptionRow(
     subscription: Subscription,
     category: Category?,
+    showCategory: Boolean,
     shape: Shape,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -483,8 +515,14 @@ private fun SubscriptionRow(
     ) {
         ListItem(
             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-            leadingContent = { CategoryDot(category?.colorHex) },
-            overlineContent = category?.let { { Text(it.name) } },
+            // Inside a group the header carries the colour and name, so the
+            // per-row dot is redundant — and dropping it gives the text room.
+            leadingContent = if (showCategory) {
+                { CategoryDot(category?.colorHex) }
+            } else {
+                null
+            },
+            overlineContent = category?.takeIf { showCategory }?.let { { Text(it.name) } },
             headlineContent = {
                 Text(
                     text = subscription.name,
@@ -508,6 +546,30 @@ private fun SubscriptionRow(
  * app does it: only the outer edges of the run are fully rounded, and
  * neighbours nearly touch.
  */
+@Composable
+private fun CategoryHeader(category: Category, isFirst: Boolean) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.padding(
+            start = 4.dp,
+            // Groups need air between them; the first sits under the controls.
+            top = if (isFirst) 0.dp else GROUP_GAP,
+            bottom = 6.dp
+        )
+    ) {
+        CategoryDot(category.colorHex)
+        Text(
+            text = category.name,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+private val GROUP_GAP = 16.dp
 private val GROUP_CORNER = 20.dp
 private val ITEM_CORNER = 4.dp
 private val CONNECTED_GAP = 2.dp
@@ -591,6 +653,7 @@ private fun SubscriptionListPreview() {
         SubscriptionListScreen(
             uiState = SubscriptionListUiState(
                 subscriptions = sample,
+                groups = listOf(SubscriptionGroup(category = null, subscriptions = sample)),
                 monthlySpend = monthlySpend(sample),
                 categories = categories,
                 categoryUsage = sample.groupingBy { it.categoryId }.eachCount(),
@@ -604,6 +667,7 @@ private fun SubscriptionListPreview() {
             onAddClick = {},
             onSubscriptionClick = {},
             onSortClick = {},
+            onGroupClick = {},
             onFiltersClick = {}
         )
     }
