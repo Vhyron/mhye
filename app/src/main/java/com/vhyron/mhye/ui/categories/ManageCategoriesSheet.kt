@@ -22,19 +22,22 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -45,6 +48,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.vhyron.mhye.ui.components.MhyeBottomSheet
 import com.vhyron.mhye.data.Category
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -54,7 +58,7 @@ fun ManageCategoriesSheet(
     categoryUsage: Map<Int, Int>,
     onDismiss: () -> Unit,
     onSave: (Category) -> Unit,
-    onDelete: (Category) -> Unit,
+    onDelete: (Category, reassignTo: Int?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     // null = closed, a Category = editing it, Category(id = 0) = adding.
@@ -65,11 +69,7 @@ fun ManageCategoriesSheet(
         mutableStateOf<Category?>(null)
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        modifier = modifier
-    ) {
+    MhyeBottomSheet(onDismissRequest = onDismiss, modifier = modifier) {
         Column(
             modifier = Modifier
                 .verticalScroll(rememberScrollState())
@@ -96,9 +96,9 @@ fun ManageCategoriesSheet(
                 CategoryRow(
                     category = category,
                     inUse = inUse,
-                    // Deleting the last category would leave the add form with
-                    // nothing to select.
-                    canDelete = inUse == 0 && categories.size > 1,
+                    // Subscriptions can be moved elsewhere, so only the last
+                    // category is undeletable — the add form needs a selection.
+                    canDelete = categories.size > 1,
                     onClick = { editing = category },
                     onDelete = { pendingDelete = category }
                 )
@@ -121,25 +121,100 @@ fun ManageCategoriesSheet(
     }
 
     pendingDelete?.let { target ->
-        AlertDialog(
-            onDismissRequest = { pendingDelete = null },
-            title = { Text("Delete ${target.name}?") },
-            text = { Text("This can't be undone.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        pendingDelete = null
-                        onDelete(target)
-                    }
-                ) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingDelete = null }) { Text("Cancel") }
+        DeleteCategoryDialog(
+            category = target,
+            inUse = categoryUsage[target.id] ?: 0,
+            destinations = categories.filter { it.id != target.id },
+            onDismiss = { pendingDelete = null },
+            onConfirm = { reassignTo ->
+                pendingDelete = null
+                onDelete(target, reassignTo)
             }
         )
     }
+}
+
+/**
+ * Deleting a category in use would break the foreign key, so those
+ * subscriptions have to go somewhere first. [onConfirm] receives the chosen
+ * destination, or null when nothing needed moving.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DeleteCategoryDialog(
+    category: Category,
+    inUse: Int,
+    destinations: List<Category>,
+    onDismiss: () -> Unit,
+    onConfirm: (reassignTo: Int?) -> Unit
+) {
+    var reassignTo by rememberSaveable(category.id) {
+        mutableStateOf(destinations.firstOrNull()?.id)
+    }
+    var expanded by remember { mutableStateOf(false) }
+    val selected = destinations.firstOrNull { it.id == reassignTo }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Delete ${category.name}?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text(
+                    if (inUse == 0) {
+                        "This can't be undone."
+                    } else {
+                        val plural = if (inUse == 1) "subscription uses" else "subscriptions use"
+                        "$inUse $plural this category. Move them to:"
+                    }
+                )
+
+                if (inUse > 0) {
+                    ExposedDropdownMenuBox(
+                        expanded = expanded,
+                        onExpandedChange = { expanded = it }
+                    ) {
+                        OutlinedTextField(
+                            value = selected?.name.orEmpty(),
+                            onValueChange = {},
+                            readOnly = true,
+                            singleLine = true,
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+                            modifier = Modifier
+                                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                                .fillMaxWidth()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false }
+                        ) {
+                            destinations.forEach { destination ->
+                                DropdownMenuItem(
+                                    text = { Text(destination.name) },
+                                    leadingIcon = { CategoryDot(destination.colorHex) },
+                                    onClick = {
+                                        reassignTo = destination.id
+                                        expanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(reassignTo.takeIf { inUse > 0 }) },
+                enabled = inUse == 0 || reassignTo != null
+            ) {
+                Text(
+                    text = if (inUse > 0) "Move and delete" else "Delete",
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
 }
 
 @Composable

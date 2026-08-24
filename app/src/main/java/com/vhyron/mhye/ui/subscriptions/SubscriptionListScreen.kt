@@ -26,8 +26,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.automirrored.filled.List
@@ -60,6 +61,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -88,6 +90,7 @@ fun SubscriptionListScreen(
     var showCategories by rememberSaveable { mutableStateOf(false) }
     var showFilters by rememberSaveable { mutableStateOf(false) }
     var showSort by rememberSaveable { mutableStateOf(false) }
+    var showGroup by rememberSaveable { mutableStateOf(false) }
     var pendingImport by rememberSaveable { mutableStateOf<Uri?>(null) }
     var showReminderSettings by rememberSaveable { mutableStateOf(false) }
     val defaultReminderDays by viewModel.defaultReminderDays.collectAsStateWithLifecycle()
@@ -119,6 +122,7 @@ fun SubscriptionListScreen(
         onImportClick = { importLauncher.launch(arrayOf("application/json")) },
         snackbarHostState = snackbarHostState,
         onSortClick = { showSort = true },
+        onGroupClick = { showGroup = true },
         onFiltersClick = { showFilters = true },
         onAddClick = {
             editingId = null
@@ -162,6 +166,14 @@ fun SubscriptionListScreen(
             defaultReminderDays = defaultReminderDays,
             onDefaultReminderDaysChange = viewModel::setDefaultReminderDays,
             onDismiss = { showReminderSettings = false }
+        )
+    }
+
+    if (showGroup) {
+        GroupSheet(
+            groupBy = uiState.groupBy,
+            onGroupByChange = viewModel::setGroupBy,
+            onDismiss = { showGroup = false }
         )
     }
 
@@ -211,7 +223,9 @@ fun SubscriptionListScreen(
             categoryUsage = uiState.categoryUsage,
             onDismiss = { showCategories = false },
             onSave = viewModel::saveCategory,
-            onDelete = viewModel::deleteCategory
+            onDelete = { category, reassignTo ->
+                viewModel.deleteCategory(category, reassignTo)
+            }
         )
     }
 }
@@ -228,6 +242,7 @@ private fun SubscriptionListScreen(
     onAddClick: () -> Unit,
     onSubscriptionClick: (Subscription) -> Unit,
     onSortClick: () -> Unit,
+    onGroupClick: () -> Unit,
     onFiltersClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -235,7 +250,7 @@ private fun SubscriptionListScreen(
 
     Scaffold(
         modifier = modifier,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
@@ -273,7 +288,7 @@ private fun SubscriptionListScreen(
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer
                 )
             )
         },
@@ -292,6 +307,7 @@ private fun SubscriptionListScreen(
             ListControls(
                 uiState = uiState,
                 onSortClick = onSortClick,
+                onGroupClick = onGroupClick,
                 onFiltersClick = onFiltersClick
             )
 
@@ -300,14 +316,27 @@ private fun SubscriptionListScreen(
             } else {
                 LazyColumn(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(CONNECTED_GAP)
                 ) {
-                    items(uiState.subscriptions, key = { it.id }) { subscription ->
-                        SubscriptionRow(
-                            subscription = subscription,
-                            category = categoriesById[subscription.categoryId],
-                            onClick = { onSubscriptionClick(subscription) }
-                        )
+                    uiState.groups.forEachIndexed { groupIndex, group ->
+                        group.category?.let { category ->
+                            item(key = "header-${category.id}") {
+                                CategoryHeader(category, isFirst = groupIndex == 0)
+                            }
+                        }
+                        itemsIndexed(
+                            items = group.subscriptions,
+                            key = { _, subscription -> subscription.id }
+                        ) { index, subscription ->
+                            SubscriptionRow(
+                                subscription = subscription,
+                                category = categoriesById[subscription.categoryId],
+                                // The header already names the category.
+                                showCategory = group.category == null,
+                                shape = connectedShape(index, group.subscriptions.size),
+                                onClick = { onSubscriptionClick(subscription) }
+                            )
+                        }
                     }
                 }
             }
@@ -378,8 +407,9 @@ private fun SpendSummary(monthlySpend: List<MonthlySpend>, modifier: Modifier = 
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(GROUP_CORNER),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
         )
     ) {
         Column(
@@ -409,18 +439,28 @@ private fun SpendSummary(monthlySpend: List<MonthlySpend>, modifier: Modifier = 
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun ListControls(
     uiState: SubscriptionListUiState,
     onSortClick: () -> Unit,
+    onGroupClick: () -> Unit,
     onFiltersClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
+    // Three controls no longer fit every screen width, so let them wrap
+    // rather than clip.
+    FlowRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp)
     ) {
+        FilterChip(
+            selected = uiState.groupBy != GroupBy.NONE,
+            onClick = onGroupClick,
+            label = { Text("Group") }
+        )
         FilterChip(
             selected = uiState.activeFilterCount > 0,
             onClick = onFiltersClick,
@@ -453,6 +493,8 @@ private fun SortChip(sortOrder: SortOrder, onClick: () -> Unit) {
 private fun SubscriptionRow(
     subscription: Subscription,
     category: Category?,
+    showCategory: Boolean,
+    shape: Shape,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -466,14 +508,21 @@ private fun SubscriptionRow(
     Card(
         modifier = modifier.fillMaxWidth(),
         onClick = onClick,
+        shape = shape,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
         )
     ) {
         ListItem(
             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-            leadingContent = { CategoryDot(category?.colorHex) },
-            overlineContent = category?.let { { Text(it.name) } },
+            // Inside a group the header carries the colour and name, so the
+            // per-row dot is redundant — and dropping it gives the text room.
+            leadingContent = if (showCategory) {
+                { CategoryDot(category?.colorHex) }
+            } else {
+                null
+            },
+            overlineContent = category?.takeIf { showCategory }?.let { { Text(it.name) } },
             headlineContent = {
                 Text(
                     text = subscription.name,
@@ -490,6 +539,52 @@ private fun SubscriptionRow(
             }
         )
     }
+}
+
+/**
+ * Rounding for a run of cards that read as one block, as the system Settings
+ * app does it: only the outer edges of the run are fully rounded, and
+ * neighbours nearly touch.
+ */
+@Composable
+private fun CategoryHeader(category: Category, isFirst: Boolean) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.padding(
+            start = 4.dp,
+            // Groups need air between them; the first sits under the controls.
+            top = if (isFirst) 0.dp else GROUP_GAP,
+            bottom = 6.dp
+        )
+    ) {
+        CategoryDot(category.colorHex)
+        Text(
+            text = category.name,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+private val GROUP_GAP = 16.dp
+private val GROUP_CORNER = 20.dp
+private val ITEM_CORNER = 4.dp
+private val CONNECTED_GAP = 2.dp
+
+private fun connectedShape(index: Int, count: Int): Shape = when {
+    count == 1 -> RoundedCornerShape(GROUP_CORNER)
+    index == 0 -> RoundedCornerShape(
+        topStart = GROUP_CORNER, topEnd = GROUP_CORNER,
+        bottomStart = ITEM_CORNER, bottomEnd = ITEM_CORNER
+    )
+    index == count - 1 -> RoundedCornerShape(
+        topStart = ITEM_CORNER, topEnd = ITEM_CORNER,
+        bottomStart = GROUP_CORNER, bottomEnd = GROUP_CORNER
+    )
+    else -> RoundedCornerShape(ITEM_CORNER)
 }
 
 @Composable
@@ -558,6 +653,7 @@ private fun SubscriptionListPreview() {
         SubscriptionListScreen(
             uiState = SubscriptionListUiState(
                 subscriptions = sample,
+                groups = listOf(SubscriptionGroup(category = null, subscriptions = sample)),
                 monthlySpend = monthlySpend(sample),
                 categories = categories,
                 categoryUsage = sample.groupingBy { it.categoryId }.eachCount(),
@@ -571,6 +667,7 @@ private fun SubscriptionListPreview() {
             onAddClick = {},
             onSubscriptionClick = {},
             onSortClick = {},
+            onGroupClick = {},
             onFiltersClick = {}
         )
     }

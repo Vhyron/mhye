@@ -20,6 +20,10 @@ interface SubscriptionDao {
     @Query("SELECT * FROM Subscription WHERE id = :id")
     suspend fun getById(id: Int): Subscription?
 
+    /** Bulk-moves every subscription in one category to another. */
+    @Query("UPDATE Subscription SET categoryId = :toCategoryId WHERE categoryId = :fromCategoryId")
+    suspend fun reassignCategory(fromCategoryId: Int, toCategoryId: Int)
+
     @Insert
     suspend fun insert(subscription: Subscription): Long
 

@@ -24,7 +24,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -32,7 +31,6 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -46,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.vhyron.mhye.ui.components.MhyeBottomSheet
 import com.vhyron.mhye.data.BillingCycle
 import com.vhyron.mhye.data.Category
 import com.vhyron.mhye.data.REMINDERS_OFF
@@ -87,11 +86,7 @@ fun AddEditSubscriptionSheet(
     onDelete: (Subscription) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        modifier = modifier
-    ) {
+    MhyeBottomSheet(onDismissRequest = onDismiss, modifier = modifier) {
         // Re-key so opening a different row rebuilds the form state from scratch.
         key(subscription?.id) {
             SubscriptionForm(
