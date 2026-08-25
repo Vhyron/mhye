@@ -62,6 +62,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -259,7 +260,7 @@ private fun SubscriptionListScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text("Subscriptions")
+                        Text("Subscriptions", fontWeight = FontWeight.ExtraBold)
                         // Counts what's on screen, so it tracks the filters.
                         if (uiState.hasAnySubscriptions) {
                             Surface(
